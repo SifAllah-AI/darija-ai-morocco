@@ -1,42 +1,43 @@
+from flask import Flask, request, jsonify
 import os
 import requests
 
-# Darija AI Morocco - جيل 2026
-# المدير العام: سيف الله علي
+app = Flask(__name__)
 
 def ask_gemini(prompt):
     api_key = os.getenv("OPENROUTER_API_KEY")
     url = "https://openrouter.ai/api/v1/chat/completions"
-
+    
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-
+    
     data = {
         "model": "google/gemini-1.5-flash",
         "messages": [
-            {
-                "role": "system",
-                "content": "نتا ذكاء اصطناعي مغربي سميتك سيف، ولد الرباط. خدمتك تجاوب الناس بالدارجة المغربية ديال ولاد الرباط. ممنوع تهضر بالفصحى ولا بالإنجليزية. جاوب ديمة بدارجة مغربية زوينة و كون محترم و ضريف."
-            },
+            {"role": "system", "content": "جاوب بالدارجة المغربية و كون ضريف"},
             {"role": "user", "content": prompt}
         ]
     }
-
+    
     response = requests.post(url, headers=headers, json=data)
     return response.json()["choices"][0]["message"]["content"]
 
-print("السلام عليكم، أنا سيف")
-print("أنا ذكاء اصطناعي مغربي ولد الرباط 🇲🇦")
-print("هادي أول شركة ذكاء اصطناعي مغربي 100%")
-print("--------------------------------")
+@app.route('/')
+def home():
+    return "أنا سيف الله AI 🇲🇦 - ذكاء اصطناعي مغربي خدام لايف"
 
-while True:
-    so2al = input("سولني a خويا: ")
-    if so2al == "خروج":
-        print("تهلا ف راسك a بطل")
-        break
-    jawab = ask_gemini(so2al)
-    print("سيف:", jawab)
-    print("--------------------------------")
+@app.route('/ask', methods=['GET', 'POST'])
+def ask():
+    if request.method == 'GET':
+        question = request.args.get('q', 'سلام')
+    else:
+        question = request.json.get('question', 'سلام')
+    
+    answer = ask_gemini(question)
+    return jsonify({"question": question, "answer": answer})
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
