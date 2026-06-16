@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مساعد الدارجة المغربية</title>
+    <style>
+        body { font-family: Arial; background: #1a1a1a; color: white; text-align: center; padding: 20px; }
+        textarea { width: 90%; height: 100px; margin: 10px; padding: 10px; border-radius: 10px; }
+        button { background: #00ff88; color: black; padding: 15px 30px; border: none; border-radius: 10px; font-size: 18px; cursor: pointer; }
+        #result { background: #333; padding: 20px; margin: 20px; border-radius: 10px; text-align: right; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>🤖 مساعد الدارجة المغربية</h1>
+    <textarea id="prompt" placeholder="كتب سؤالك بالدارجة هنا..."></textarea><br>
+    <button onclick="sendMessage()">سيفط</button>
+    <div id="result"></div>
+
+    <script>
+        async function sendMessage() {
+            const prompt = document.getElementById('prompt').value;
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'كنفكر... 🤔';
+            
+            const response = await fetch('/ask', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({prompt: prompt})
+            });
+            const data = await response.json();
+            resultDiv.innerHTML = data.response;
+        }
+    </script>
+</body>
+</html>
