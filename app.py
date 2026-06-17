@@ -82,7 +82,7 @@ body { font-family: 'Cairo', sans-serif; }
 </div>
 <button onclick="showVetInfo()" class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-4 py-2 rounded-lg text-sm font-semibold transition-all">🩺 بيطري قريب</button>
 </div>
-<div class="ad-banner rounded-xl p-3 text-center text-slate-900 font-bold text-sm">🔥 إشهار: أعلاف طبيعية 100% • توصيل مجاني في <span id="adCity">مدينتك</span> • اتصل: 0600000000</div>
+<div class="ad-banner rounded-xl p-3 text-center text-slate-900 font-bold text-sm">🔥 إشهار: أعلاف طبيعية 100% • توصيل مجاني في <span id="adCity">مدينتك</span> • اتصل: 0615957179</div>
 </div>
 <div id="chat" class="flex-1 glass rounded-2xl p-6 mb-4 overflow-y-auto space-y-4"></div>
 <div class="glass rounded-2xl p-4">
@@ -158,89 +158,4 @@ const msg = document.createElement('div');
 msg.className = isUser? 'flex justify-end' : '';
 let html = `<div class="${isUser? 'msg-user' : 'msg-ai'} rounded-2xl ${isUser? 'rounded-tl-sm' : 'rounded-tr-sm'} p-4 max-w-[80%] ${isUser? 'ml-auto' : ''}">`;
 if (!isUser) {
-html += `<div class="flex items-center gap-2 mb-2"><div class="w-6 h-6 bg-teal-500 rounded-full flex items-center justify-center text-xs">AI</div><span class="text-teal-300 text-sm font-semibold">Darija AI</span></div>`;
-}
-if (imageUrl) html += `<img src="${imageUrl}" class="w-full rounded-lg mb-3 max-h-64 object-cover">`;
-html += `<p class="text-slate-100 leading-relaxed whitespace-pre-wrap">${content}</p></div>`;
-msg.innerHTML = html;
-chat.appendChild(msg);
-chat.scrollTop = chat.scrollHeight;
-}
-async function sendMessage() {
-const textInput = document.getElementById('textInput');
-const text = textInput.value.trim();
-if (!text &&!currentImage) return;
-let imageUrl = null;
-let imageBase64 = null;
-if (currentImage) {
-imageUrl = URL.createObjectURL(currentImage);
-const reader = new FileReader();
-imageBase64 = await new Promise(resolve => {
-reader.onload = e => resolve(e.target.result.split(',')[1]);
-reader.readAsDataURL(currentImage);
-});
-}
-addMessage(text || 'صيفطت ليك تصويرة', true, imageUrl);
-textInput.value = '';
-clearImage();
-try {
-const res = await fetch('/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: text, image: imageBase64, history: chatHistory, city: userCity})});
-const data = await res.json();
-addMessage(data.reply, false);
-chatHistory.push({role: 'user', parts: [text || 'صورة']});
-chatHistory.push({role: 'model', parts: [data.reply]});
-} catch (err) {
-addMessage('سمح ليا، وقع خطأ. عاود جرب', false);
-}
-}
-document.getElementById('textInput').addEventListener('input', function() {
-this.style.height = 'auto';
-this.style.height = this.scrollHeight + 'px';
-});
-</script>
-</body>
-</html>
-'''
-
-@app.route('/')
-def home():
-    return render_template_string(HTML)
-
-@app.route('/set_city', methods=['POST'])
-def set_city():
-    session['city'] = request.json.get('city')
-    return jsonify({'status': 'ok'})
-
-@app.route('/get_vet', methods=['POST'])
-def get_vet():
-    city = request.json.get('city')
-    vet = VETS_DB.get(city, {"name": "ما لقيتش", "phone": "----", "address": "تواصل معانا نزيدوه"})
-    return jsonify(vet)
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    try:
-        data = request.json
-        message = data.get('message', '')
-        image_b64 = data.get('image')
-        history = data.get('history', [])
-        city = data.get('city', 'المغرب')
-        today = datetime.now().weekday()
-        souk_today = SOUKS.get(today, "ما كاينش سوق اليوم")
-        vet_info = VETS_DB.get(city, {})
-        chat = model.start_chat(history=history)
-        system_prompt = f"أنت Darija AI Pro خبير فلاحي مغربي من {city}. المستخدم من {city}. اليوم: {souk_today}. البيطري المحلي: {vet_info.get('name', 'غير متوفر')} - {vet_info.get('phone', '')}. جاوب بالدارجة المغربية باختصار ووضوح. إلا كان المرض خطير اقترح البيطري المحلي."
-        if image_b64:
-            img = {'mime_type': 'image/jpeg', 'data': image_b64}
-            prompt = f"{system_prompt}\n\nالمستخدم قال: {message}\n\nحلل التصويرة و جاوب:"
-            response = chat.send_message([prompt, img])
-        else:
-            prompt = f"{system_prompt}\n\nالمستخدم: {message}\n\nجاوب:"
-            response = chat.send_message(prompt)
-        return jsonify({'reply': response.text})
-    except Exception as e:
-        return jsonify({'reply': f'خطأ: {str(e)}'})
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+html += `<div class="flex items-center gap-2 mb
