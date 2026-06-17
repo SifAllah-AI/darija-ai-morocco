@@ -1,5 +1,5 @@
-pytest
-black
-isort
-pre-commit
-flake8
+# Runtime (production) dependencies
+# Example:
+# fastapi==0.95.0
+# uvicorn[standard]==0.22.0
+# (leave empty if this repo is a tooling/meta repo)
