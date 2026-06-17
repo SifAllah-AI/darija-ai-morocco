@@ -31,7 +31,7 @@ SOUKS = {
     6: "الأحد: سوق الأحد في أكادير، إنزكان، تيزنيت"
 }
 
-HTML = '''<!DOCTYPE html>
+HTML = """<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="UTF-8">
@@ -95,67 +95,4 @@ body { font-family: 'Cairo', sans-serif; }
 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/></svg>
 </button>
 <button onclick="document.getElementById('cameraInput').click()" class="bg-slate-700 hover:bg-slate-600 p-3 rounded-xl transition-all">
-<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586l-.707-.707A1 1 0 0013 4H7a1 1 0 00-.707.293L5.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
-</button>
-<input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" onchange="handleImage(this)">
-<input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleImage(this)">
-<textarea id="textInput" rows="1" placeholder="كتب رسالتك..." class="flex-1 bg-slate-800/50 border border-slate-600 rounded-xl px-4 py-3 focus:outline-none focus:border-teal-500 resize-none" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
-<button onclick="sendMessage()" class="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 p-3 rounded-xl transition-all shadow-lg shadow-teal-500/30">
-<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
-</button>
-</div>
-</div>
-</div>
-<script>
-let currentImage = null;
-let chatHistory = [];
-let userCity = localStorage.getItem('userCity') || '';
-window.onload = () => {
-if (!userCity) {
-document.getElementById('cityModal').classList.remove('hidden');
-} else {
-initChat();
-}
-}
-function saveCity() {
-const city = document.getElementById('citySelect').value;
-if (!city) return alert('اختار المدينة a البطل');
-userCity = city;
-localStorage.setItem('userCity', city);
-document.getElementById('cityModal').classList.add('hidden');
-initChat();
-fetch('/set_city', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({city: city})});
-}
-function initChat() {
-document.getElementById('userCity').innerText = userCity;
-document.getElementById('adCity').innerText = userCity;
-addMessage(`السلام عليكم a ولد ${userCity} 👋\nأنا الخبير الفلاحي الذكي ديالك. مرحبا بيك.\n\nاليوم ${getTodaySouk()}\n\nشنو نقدر نعاونك اليوم؟ 🌱🐄`, false);
-}
-function getTodaySouk() {
-const days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
-return days[new Date().getDay()];
-}
-function showVetInfo() {
-fetch('/get_vet', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({city: userCity})}).then(r => r.json()).then(data => {
-addMessage(`🩺 البيطري القريب ليك في ${userCity}:\n\n👨‍⚕️ الاسم: ${data.name}\n📞 الهاتف: ${data.phone}\n📍 العنوان: ${data.address}\n\nنعيط ليه دابا؟`, false);
-});
-}
-function handleImage(input) {
-const file = input.files[0];
-if (!file) return;
-currentImage = file;
-document.getElementById('preview').classList.remove('hidden');
-document.getElementById('previewImg').src = URL.createObjectURL(file);
-input.value = '';
-}
-function clearImage() {
-currentImage = null;
-document.getElementById('preview').classList.add('hidden');
-}
-function addMessage(content, isUser, imageUrl = null) {
-const chat = document.getElementById('chat');
-const msg = document.createElement('div');
-msg.className = isUser? 'flex justify-end' : '';
-let html = `<div class="${isUser? 'msg-user' : 'msg-ai'} rounded-2xl ${isUser? 'rounded-tl-sm' : 'rounded-tr-sm'} p-4 max-w-[80%] ${isUser? 'ml-auto' : ''}">`;
-if (!isUser) {
-html += `<div class="flex items-center gap-2 mb
+<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586l-.707-.707A1 1 0 0013 4H7a1 1
