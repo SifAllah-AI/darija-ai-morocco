@@ -1,4 +1,4 @@
-   flask
-   gunicorn
-   openai
-   requests
+Flask
+gunicorn
+openai
+google-generativeai
