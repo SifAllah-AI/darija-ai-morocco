@@ -1,210 +1,303 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, render_template_string, request, jsonify, session
 import google.generativeai as genai
-import os
 import base64
+import os
+from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-HTML_PAGE = """
+# قاعدة بيانات البياطرة حسب المدينة - زيد المدن ديالك هنا
+VETS_DB = {
+    "الدار البيضاء": {"name": "د. أحمد البيطري", "phone": "0612345678", "address": "عين السبع"},
+    "الرباط": {"name": "د. فاطمة الزهراء", "phone": "0623456789", "address": "أكدال"},
+    "فاس": {"name": "د. يوسف البيطري", "phone": "0634567890", "address": "سايس"},
+    "مراكش": {"name": "د. سعيد البيطري", "phone": "0645678901", "address": "جليز"},
+    "طنجة": {"name": "د. كريم البيطري", "phone": "0656789012", "address": "بني مكادة"},
+    "أكادير": {"name": "د. حسناء", "phone": "0667890123", "address": "تالبرجت"},
+    "وجدة": {"name": "د. محمد البيطري", "phone": "0678901234", "address": "لازاري"},
+    "مكناس": {"name": "د. رشيد", "phone": "0689012345", "address": "حمرية"},
+}
+
+# أسواق المواشي حسب اليوم
+SOUKS = {
+    0: "الاثنين: سوق الاثنين في تازة، بركان، القنيطرة",
+    1: "الثلاثاء: سوق ثلاثاء الأولاد في سطات، ثلاثاء سيدي بنور",
+    2: "الأربعاء: سوق الأربعاء في الغرب، سوق الأربعاء ديال بني ملال",
+    3: "الخميس: سوق الخميس في الفقيه بن صالح، خميس الزمامرة",
+    4: "الجمعة: سوق الجمعة في مراكش، تارودانت، الصويرة",
+    5: "السبت: سوق السبت في أولاد تايمة، سبت الكردان",
+    6: "الأحد: سوق الأحد في أكادير، إنزكان، تيزنيت"
+}
+
+HTML = '''
 <!DOCTYPE html>
-<html dir="rtl">
+<html dir="rtl" lang="ar">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تبيب نّ الزرع و المواشي - Dr. Plant & Cattle</title>
+    <title>Darija AI Pro | الخبير الفلاحي الذكي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial; background: #0a4d2e; color: white; text-align: center; padding: 10px; margin:0; }
-       .box { background: #1a6b42; padding: 15px; border-radius: 15px; margin: 10px auto; max-width: 600px; }
-        button, select { background: #ffd700; color: #0a4d2e; border: none; padding: 12px 20px; border-radius: 10px; font-size: 16px; font-weight: bold; margin: 5px; cursor: pointer; }
-        input, textarea { width: 90%; padding: 10px; border-radius: 8px; border: none; margin: 5px 0; font-size: 16px; }
-        input[type=file] { display: none; }
-        #result { background: #0d5a36; padding: 15px; border-radius: 10px; margin-top: 15px; text-align: right; white-space: pre-wrap; }
-        img { max-width: 100%; border-radius: 10px; margin: 10px 0; }
-       .speak-btn { background: #4CAF50; color: white; }
-       .share-btn { background: #25D366; color: white; }
-       .tab { background: #0d5a36; padding: 10px; border-radius: 10px 10px 0 0; display: inline-block; margin: 0 2px; }
-       .active { background: #ffd700; color: #0a4d2e; }
-        h1 { margin: 10px 0; }
+        body { font-family: 'Cairo', sans-serif; }
+      .gradient-bg { background: linear-gradient(135deg, #020617 0%, #0f172a 25%, #134e4a 100%); }
+      .glass { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(20, 184, 166, 0.3); }
+      .msg-user { background: linear-gradient(135deg, #0d9488, #14b8a6); }
+      .msg-ai { background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(20, 184, 166, 0.3); }
+      .glow-green { box-shadow: 0 0 30px rgba(20, 184, 166, 0.4); }
+      .ad-banner { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
     </style>
 </head>
-<body>
-    <h1>🌱🐄 تبيب نّ الزرع و المواشي</h1>
-    <p>الخبير الأول فالمغرب لتشخيص أمراض النباتات و الحيوانات</p>
+<body class="gradient-bg min-h-screen text-white">
+    <!-- Modal اختيار المدينة -->
+    <div id="cityModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="glass rounded-3xl p-8 max-w-md w-full glow-green">
+            <h2 class="text-3xl font-bold mb-4 text-center bg-gradient-to-r from-teal-300 to-emerald-300 bg-clip-text text-transparent">مرحبا بيك a البطل 👋</h2>
+            <p class="text-slate-300 mb-6 text-center">باش نعاونك مزيان، قول ليا منين نتا؟</p>
+            <select id="citySelect" class="w-full bg-slate-800 border border-teal-500 rounded-xl px-4 py-3 mb-4 text-white">
+                <option value="">-- اختار المدينة ديالك --</option>
+                <option value="الدار البيضاء">الدار البيضاء</option>
+                <option value="الرباط">الرباط</option>
+                <option value="فاس">فاس</option>
+                <option value="مراكش">مراكش</option>
+                <option value="طنجة">طنجة</option>
+                <option value="أكادير">أكادير</option>
+                <option value="وجدة">وجدة</option>
+                <option value="مكناس">مكناس</option>
+            </select>
+            <button onclick="saveCity()" class="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 py-3 rounded-xl font-bold transition-all hover:scale-105">
+                بدا المحادثة 🚀
+            </button>
+        </div>
+    </div>
 
-    <div class="box">
-        <div>
-            <span class="tab active" onclick="setMode('plant')">🌿 نباتات و أشجار</span>
-            <span class="tab" onclick="setMode('animal')">🐄 مواشي و دواجن</span>
+    <div class="container mx-auto px-4 py-4 max-w-6xl h-screen flex flex-col">
+        <!-- Header + Ad -->
+        <div class="mb-3">
+            <div class="glass rounded-2xl p-4 mb-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-gradient-to-br from-teal-400 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/50">
+                        <svg class="w-7 h-7" fill="white" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold bg-gradient-to-r from-teal-300 to-emerald-300 bg-clip-text text-transparent">Darija AI Pro</h1>
+                        <p class="text-xs text-teal-300/80" id="userCity">الخبير الفلاحي الذكي</p>
+                    </div>
+                </div>
+                <button onclick="showVetInfo()" class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-4 py-2 rounded-lg text-sm font-semibold transition-all">
+                    🩺 بيطري قريب
+                </button>
+            </div>
+            
+            <!-- Ad Banner - هنا فين تربح الفلوس -->
+            <div class="ad-banner rounded-xl p-3 text-center text-slate-900 font-bold text-sm">
+                🔥 إشهار: أعلاف طبيعية 100% • توصيل مجاني في <span id="adCity">مدينتك</span> • اتصل: 0600000000
+            </div>
         </div>
 
-        <select id="lang" onchange="updateLang()">
-            <option value="darija">🇲🇦 دارجة مغربية</option>
-            <option value="ar">🇸🇦 العربية الفصحى</option>
-            <option value="fr">🇫🇷 Français</option>
-            <option value="en">🇬🇧 English</option>
-        </select>
+        <!-- Chat -->
+        <div id="chat" class="flex-1 glass rounded-2xl p-6 mb-4 overflow-y-auto space-y-4"></div>
 
-        <input type="file" id="camera" accept="image/*" capture="environment">
-        <input type="file" id="gallery" accept="image/*">
-        <button onclick="document.getElementById('camera').click()">📸 صور بالكاميرا</button>
-        <button onclick="document.getElementById('gallery').click()">🖼️ ختار تصويرة</button>
-
-        <div id="preview"></div>
-        <div id="result"></div>
-
-        <button id="speakBtn" class="speak-btn" onclick="speak()" style="display:none;">🔊 سمع التشخيص</button>
-        <button id="shareBtn" class="share-btn" onclick="share()" style="display:none;">📲 بارطاجي فـ WhatsApp</button>
-
-        <div id="contact" style="margin-top:20px; display:none;">
-            <h3>بغيتي يتواصلو معاك الخبراء؟</h3>
-            <input type="text" id="name" placeholder="سميتك">
-            <input type="tel" id="phone" placeholder="نمرة التيليفون WhatsApp">
-            <button onclick="saveContact()">✅ تسجل و توصلك النصائح</button>
-            <p id="contactMsg"></p>
+        <!-- Input -->
+        <div class="glass rounded-2xl p-4">
+            <div id="preview" class="hidden mb-3 relative">
+                <img id="previewImg" class="w-20 h-20 object-cover rounded-lg">
+                <button onclick="clearImage()" class="absolute -top-2 -right-2 bg-red-500 rounded-full w-6 h-6 text-xs">×</button>
+            </div>
+            <div class="flex gap-3 items-end">
+                <button onclick="document.getElementById('fileInput').click()" class="bg-slate-700 hover:bg-slate-600 p-3 rounded-xl transition-all">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/></svg>
+                </button>
+                <button onclick="document.getElementById('cameraInput').click()" class="bg-slate-700 hover:bg-slate-600 p-3 rounded-xl transition-all">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586l-.707-.707A1 1 0 0013 4H7a1 1 0 00-.707.293L5.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+                </button>
+                <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" onchange="handleImage(this)">
+                <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleImage(this)">
+                <textarea id="textInput" rows="1" placeholder="كتب رسالتك..." class="flex-1 bg-slate-800/50 border border-slate-600 rounded-xl px-4 py-3 focus:outline-none focus:border-teal-500 resize-none" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+                <button onclick="sendMessage()" class="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 p-3 rounded-xl transition-all shadow-lg shadow-teal-500/30">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
+                </button>
+            </div>
         </div>
     </div>
 
     <script>
-        let currentText = '';
-        let currentMode = 'plant';
-        let currentLang = 'darija';
+        let currentImage = null;
+        let chatHistory = [];
+        let userCity = localStorage.getItem('userCity') || '';
 
-        const langMap = {
-            'darija': 'ar-SA', 'ar': 'ar-SA', 'fr': 'fr-FR', 'en': 'en-US'
-        };
-
-        document.getElementById('camera').onchange = upload;
-        document.getElementById('gallery').onchange = upload;
-
-        function setMode(mode) {
-            currentMode = mode;
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-        }
-
-        function updateLang() {
-            currentLang = document.getElementById('lang').value;
-        }
-
-        function upload(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            document.getElementById('preview').innerHTML = '<img src="' + URL.createObjectURL(file) + '">';
-            document.getElementById('result').innerHTML = 'كنحلل الصورة... صبر شوية 🤖';
-            document.getElementById('speakBtn').style.display = 'none';
-            document.getElementById('shareBtn').style.display = 'none';
-            document.getElementById('contact').style.display = 'none';
-
-            const reader = new FileReader();
-            reader.onload = function() {
-                fetch('/analyze', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        image: reader.result,
-                        mode: currentMode,
-                        lang: currentLang
-                    })
-                })
-      .then(r => r.json())
-      .then(data => {
-                    currentText = data.result;
-                    document.getElementById('result').innerHTML = '<b>التشخيص:</b><br>' + data.result;
-                    document.getElementById('speakBtn').style.display = 'inline-block';
-                    document.getElementById('shareBtn').style.display = 'inline-block';
-                    document.getElementById('contact').style.display = 'block';
-                    speak();
-                })
-      .catch(err => {
-                    document.getElementById('result').innerHTML = 'وقع مشكل. عاود جرب';
-                });
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function speak() {
-            if (!currentText) return;
-            speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(currentText);
-            utterance.lang = langMap[currentLang];
-            utterance.rate = 0.9;
-            const voices = speechSynthesis.getVoices();
-            const voice = voices.find(v => v.lang.includes(langMap[currentLang].split('-')[0]));
-            if (voice) utterance.voice = voice;
-            speechSynthesis.speak(utterance);
-        }
-
-        function share() {
-            const text = `🌱 تبيب نّ الزرع و المواشي 🔬\n\nالتشخيص:\n${currentText}\n\nجربو التطبيق فابور: ${window.location.href}`;
-            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-        }
-
-        function saveContact() {
-            const name = document.getElementById('name').value;
-            const phone = document.getElementById('phone').value;
-            if (!name ||!phone) {
-                document.getElementById('contactMsg').innerHTML = 'عمر سميتك و النمرة عافاك';
-                return;
+        window.onload = () => {
+            if (!userCity) {
+                document.getElementById('cityModal').classList.remove('hidden');
+            } else {
+                initChat();
             }
-            // هنا تقدر تصيفطها لـ Google Sheet ولا Email من بعد
-            document.getElementById('contactMsg').innerHTML = '✅ تسجلتي! غادي نتواصلو معاك فـ WhatsApp قريبا';
-            fetch('/contact', {
+        }
+
+        function saveCity() {
+            const city = document.getElementById('citySelect').value;
+            if (!city) return alert('اختار المدينة a البطل');
+            userCity = city;
+            localStorage.setItem('userCity', city);
+            document.getElementById('cityModal').classList.add('hidden');
+            initChat();
+            fetch('/set_city', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({name: name, phone: phone})
+                body: JSON.stringify({city: city})
             });
         }
 
-        speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
-    </script>
-</body>
-</html>
-"""
+        function initChat() {
+            document.getElementById('userCity').innerText = userCity;
+            document.getElementById('adCity').innerText = userCity;
+            addMessage(`السلام عليكم a ولد ${userCity} 👋\nأنا الخبير الفلاحي الذكي ديالك. مرحبا بيك.\n\nاليوم ${getTodaySouk()}\n\nشنو نقدر نعاونك اليوم؟ 🌱🐄`, false);
+        }
 
-@app.route('/')
-def home():
-    return render_template_string(HTML_PAGE)
+        function getTodaySouk() {
+            const days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+            return days[new Date().getDay()];
+        }
 
-@app.route('/analyze', methods=['POST'])
-def analyze():
-    try:
-        req = request.json
-        data = req['image']
-        mode = req['mode'] # plant or animal
-        lang = req['lang'] # darija, ar, fr, en
+        function showVetInfo() {
+            fetch('/get_vet', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({city: userCity})
+            }).then(r => r.json()).then(data => {
+                addMessage(`🩺 البيطري القريب ليك في ${userCity}:\n\n👨‍⚕️ الاسم: ${data.name}\n📞 الهاتف: ${data.phone}\n📍 العنوان: ${data.address}\n\nنعيط ليه دابا؟`, false);
+            });
+        }
 
-        image_data = base64.b64decode(data.split(',')[1])
+        function handleImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+            currentImage = file;
+            document.getElementById('preview').classList.remove('hidden');
+            document.getElementById('previewImg').src = URL.createObjectURL(file);
+            input.value = '';
+        }
 
-        prompts = {
-            'plant': {
-                'darija': "نتا خبير فلاحة مغربي سميتك تبيب نّ الزرع. شوف الصورة ديال النبتة/الشجرة و جاوب بالدارجة المغربية الشعبية. 1. شنو المرض؟ 2. علاش وقع؟ 3. الدوا: سميات أدوية كاينين فالمغرب + الثمن. 4. الوقاية. جاوب باختصار ومفهوم.",
-                'ar': "أنت خبير زراعي. شخص مرض النبات/الشجرة في الصورة باللغة العربية الفصحى. 1. المرض 2. السبب 3. العلاج: أسماء أدوية متوفرة في المغرب مع السعر 4. الوقاية.",
-                'fr': "Vous êtes un expert agronome. Diagnostiquez la maladie de la plante/arbre sur la photo en français. 1. Maladie 2. Cause 3. Traitement: noms de médicaments disponibles au Maroc + prix 4. Prévention.",
-                'en': "You are an agricultural expert. Diagnose the plant/tree disease in the image in English. 1. Disease 2. Cause 3. Treatment: drug names available in Morocco + price 4. Prevention."
-            },
-            'animal': {
-                'darija': "نتا بيطري مغربي خبير فالمواشي. شوف الصورة ديال البقرة/الغنمي/الدجاج و جاوب بالدارجة. 1. شنو المرض باين؟ 2. الأعراض 3. الدوا: سميات أدوية بيطرية فالمغرب + الثمن 4. نصائح. جاوب باختصار.",
-                'ar': "أنت طبيب بيطري. شخص مرض الحيوان في الصورة بالعربية. 1. المرض 2. الأعراض 3. العلاج: أدوية بيطرية متوفرة في المغرب مع السعر 4. نصائح.",
-                'fr': "Vous êtes vétérinaire. Diagnostiquez la maladie de l'animal sur la photo en français. 1. Maladie 2. Symptômes 3. Traitement: médicaments vétérinaires disponibles au Maroc + prix 4. Conseils.",
-                'en': "You are a veterinarian. Diagnose the animal disease in the image in English. 1. Disease 2. Symptoms 3. Treatment: veterinary drugs available in Morocco + price 4. Advice."
+        function clearImage() {
+            currentImage = null;
+            document.getElementById('preview').classList.add('hidden');
+        }
+
+        function addMessage(content, isUser, imageUrl = null) {
+            const chat = document.getElementById('chat');
+            const msg = document.createElement('div');
+            msg.className = isUser? 'flex justify-end' : '';
+            let html = `<div class="${isUser? 'msg-user' : 'msg-ai'} rounded-2xl ${isUser? 'rounded-tl-sm' : 'rounded-tr-sm'} p-4 max-w-[80%] ${isUser? 'ml-auto' : ''}">`;
+            if (!isUser) {
+                html += `<div class="flex items-center gap-2 mb-2"><div class="w-6 h-6 bg-teal-500 rounded-full flex items-center justify-center text-xs">AI</div><span class="text-teal-300 text-sm font-semibold">Darija AI</span></div>`;
+            }
+            if (imageUrl) html += `<img src="${imageUrl}" class="w-full rounded-lg mb-3 max-h-64 object-cover">`;
+            html += `<p class="text-slate-100 leading-relaxed whitespace-pre-wrap">${content}</p></div>`;
+            msg.innerHTML = html;
+            chat.appendChild(msg);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const textInput = document.getElementById('textInput');
+            const text = textInput.value.trim();
+            if (!text &&!currentImage) return;
+            
+            let imageUrl = null;
+            let imageBase64 = null;
+            if (currentImage) {
+                imageUrl = URL.createObjectURL(currentImage);
+                const reader = new FileReader();
+                imageBase64 = await new Promise(resolve => {
+                    reader.onload = e => resolve(e.target.result.split(',')[1]);
+                    reader.readAsDataURL(currentImage);
+                });
+            }
+            
+            addMessage(text || 'صيفطت ليك تصويرة', true, imageUrl);
+            textInput.value = '';
+            clearImage();
+            
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: text, image: imageBase64, history: chatHistory, city: userCity})
+                });
+                const data = await res.json();
+                addMessage(data.reply, false);
+                chatHistory.push({role: 'user', parts: [text || 'صورة']});
+                chatHistory.push({role: 'model', parts: [data.reply]});
+            } catch (err) {
+                addMessage('سمح ليا، وقع خطأ. عاود جرب', false);
             }
         }
 
-        prompt = prompts[mode][lang]
-        response = model.generate_content([prompt, {"mime_type": "image/jpeg", "data": image_data}])
-        return jsonify({"result": response.text})
-    except Exception as e:
-        return jsonify({"result": f"خطأ: {str(e)}"})
+        document.getElementById('textInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+        });
+    </script>
+</body>
+</html>
+'''
 
-@app.route('/contact', methods=['POST'])
-def contact():
-    # هنا من بعد نقدرو نصيفطوها لـ Google Sheet ولا Email
-    data = request.json
-    print(f"New lead: {data['name']} - {data['phone']}") # كتبان فـ Railway Logs
-    return jsonify({"status": "ok"})
+@app.route('/')
+def home():
+    return render_template_string(HTML)
+
+@app.route('/set_city', methods=['POST'])
+def set_city():
+    session['city'] = request.json.get('city')
+    return jsonify({'status': 'ok'})
+
+@app.route('/get_vet', methods=['POST'])
+def get_vet():
+    city = request.json.get('city')
+    vet = VETS_DB.get(city, {"name": "ما لقيتش", "phone": "----", "address": "تواصل معانا نزيدوه"})
+    return jsonify(vet)
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    try:
+        data = request.json
+        message = data.get('message', '')
+        image_b64 = data.get('image')
+        history = data.get('history', [])
+        city = data.get('city', 'المغرب')
+        
+        today = datetime.now().weekday()
+        souk_today = SOUKS.get(today, "ما كاينش سوق اليوم")
+        vet_info = VETS_DB.get(city, {})
+        
+        chat = model.start_chat(history=history)
+        
+        system_prompt = f"""أنت Darija AI Pro، خبير فلاحي مغربي ذكي من {city}. 
+المستخدم من {city}.
+اليوم: {souk_today}
+البيطري المحلي: {vet_info.get('name', 'غير متوفر')} - {vet_info.get('phone', '')}
+
+مهمتك:
+1. تهضر بالدارجة المغربية ديال {city}
+2. تذكر المستخدم بالسوق ديال اليوم إلا كان سول على البيع/الشراء
+3. إلا كان المرض خطير، اقترح عليه البيطري المحلي و عطيه النمرة
+4. كون ودود و محترف، بحال شي ولد البلاد
+5. جاوب باختصار و وضوح"""
+        
+        if image_b64:
+            img = {'mime_type': 'image/jpeg', 'data': image_b64}
+            prompt = f"{system_prompt}\n\nالمستخدم قال: {message}\n\nحلل التصويرة و جاوب:"
+            response = chat.send_message([prompt, img])
+        else:
+            prompt = f"{system_prompt}\n\nالمستخدم: {message}\n\nجاوب:"
+            response = chat.send_message(prompt)
+            
+        return jsonify({'reply': response.text})
+    except Exception as e:
+        return jsonify({'reply': f'خطأ: {str(e)}'})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
+    app.run()
